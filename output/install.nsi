@@ -177,17 +177,35 @@ program_files:
   ${If} ${RunningX64}
     File "weaselx64.dll"
   ${EndIf}
+  ${If} ${IsNativeARM64}
+    File /nonfatal "weaselARM.dll"
+    File /nonfatal "weaselARM64.dll"
+    File /nonfatal "weaselARM64X.dll"
+  ${EndIf}
   File "weaselt.dll"
   ${If} ${RunningX64}
     File "weaseltx64.dll"
+  ${EndIf}
+  ${If} ${IsNativeARM64}
+    File /nonfatal "weaseltARM.dll"
+    File /nonfatal "weaseltARM64.dll"
   ${EndIf}
   File "weasel.ime"
   ${If} ${RunningX64}
     File "weaselx64.ime"
   ${EndIf}
+  ${If} ${IsNativeARM64}
+    File /nonfatal "weaselARM.ime"
+    File /nonfatal "weaselARM64.ime"
+    File /nonfatal "weaselARM64X.ime"
+  ${EndIf}
   File "weaselt.ime"
   ${If} ${RunningX64}
     File "weaseltx64.ime"
+  ${EndIf}
+  ${If} ${IsNativeARM64}
+    File /nonfatal "weaseltARM.ime"
+    File /nonfatal "weaseltARM64.ime"
   ${EndIf}
   File "WeaselDeployer.exe"
   File "WeaselServer.exe"
