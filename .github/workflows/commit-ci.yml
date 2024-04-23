@@ -15,7 +15,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-2019
     env:
       librime_build: 'submodule'
       boost_version: 1.84.0
@@ -25,8 +25,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Cache llvm
+        id: cache-llvm
+        uses: actions/cache@v4
+        with:
+          path: C:\\Program Files\\LLVM
+          key: ${{ runner.os }}-llvm-17.0.6
 
       - name: Install llvm
+        if: steps.cache-llvm.outputs.cache-hit != 'true'
         run: choco install llvm --version=17.0.6
 
       - name: Code style lint
@@ -36,10 +43,7 @@ jobs:
       - name: Configure build environment
         shell: bash
         run: |
-          cp env.vs2022.bat env.bat
-          librime_id=$(git submodule foreach --quiet 'if [ $name == "librime" ]; then echo `git rev-parse HEAD`; fi')
-          echo "librime_id is $librime_id"
-          echo "librime_id=$librime_id" >> $GITHUB_ENV
+          cp env.vs2019.bat env.bat
 
       - name: Cache Boost
         id: cache-boost
@@ -61,45 +65,19 @@ jobs:
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      # cache librime
-      - name: Cache librime
-        if: env.librime_build == 'submodule'
-        id: cache-librime
-        uses: actions/cache@v4
-        with:
-          path: |
-            librime
-          key: ${{ runner.os }}-librime-${{ env.librime_id }}
-
-      # build librime if not cached
-      - name: Build librime
-        if: ${{ env.librime_build == 'submodule' && steps.cache-librime.outputs.cache-hit != 'true' }}
-        env:
-          RIME_PLUGINS: hchunhui/librime-lua lotem/librime-octagram rime/librime-predict
-        shell: bash
+      # use upper stream released librime files if stable release
+      - name: Copy Rime files
         run: |
-          # load plugins
-          pushd librime
-          ./action-install-plugins-windows.bat
-          popd
-          ./build.bat librime
+          .\github.install.bat
 
-      # build librime if cached
-      - name: Copy librime built files cached
-        if: ${{ env.librime_build == 'submodule' && steps.cache-librime.outputs.cache-hit == 'true' }}
-        shell: bash
+      - name: Build data
         run: |
-          cp ./librime/dist/lib/rime* ./lib/
-          cp ./librime/dist/lib/rime.dll ./output/
-          cp ./librime/dist/include/*.h ./include/
+          .\build.bat data
 
       - name: Build Weasel
         id: build_weasel
-        shell: bash
         run: |
-          ./build.bat data
-          ./build.bat hant arm64
-          ./build.bat installer
+          .\build.bat hant arm64 installer
 
       - name: Compress Debug Symbols
         shell: pwsh

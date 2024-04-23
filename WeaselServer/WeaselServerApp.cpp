@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "WeaselServerApp.h"
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 WeaselServerApp::WeaselServerApp()
     : m_handler(std::make_unique<RimeWithWeaselHandler>(&m_ui)),
@@ -21,11 +21,11 @@ int WeaselServerApp::Run() {
   win_sparkle_init();
   m_ui.Create(m_server.GetHWnd());
 
-  tray_icon.Create(m_server.GetHWnd());
-  tray_icon.Refresh();
-
   m_handler->Initialize();
   m_handler->OnUpdateUI([this]() { tray_icon.Refresh(); });
+
+  tray_icon.Create(m_server.GetHWnd());
+  tray_icon.Refresh();
 
   int ret = m_server.Run();
 
@@ -38,7 +38,7 @@ int WeaselServerApp::Run() {
 }
 
 void WeaselServerApp::SetupMenuHandlers() {
-  boost::filesystem::path dir = install_dir();
+  std::filesystem::path dir = install_dir();
   m_server.AddMenuHandler(ID_WEASELTRAY_QUIT,
                           [this] { return m_server.Stop() == 0; });
   m_server.AddMenuHandler(ID_WEASELTRAY_DEPLOY,

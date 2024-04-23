@@ -9,7 +9,7 @@ static const char c_szTipKeyPrefix[] = "Software\\Microsft\\CTF\\TIP\\";
 static const char c_szInProcSvr32[] = "InprocServer32";
 static const char c_szModelName[] = "ThreadingModel";
 
-HKL FindIME() {
+HKL FindIME(LANGID langid) {
   HKL hKL = NULL;
   WCHAR key[9];
   HKEY hKey;
@@ -18,9 +18,8 @@ HKL FindIME() {
                     L"SYSTEM\\CurrentControlSet\\Control\\Keyboard Layouts", 0,
                     KEY_READ, &hKey);
   if (ret == ERROR_SUCCESS) {
-    for (DWORD id = (0xE0200000 | TEXTSERVICE_LANGID);
-         hKL == NULL && id <= (0xE0FF0000 | TEXTSERVICE_LANGID);
-         id += 0x10000) {
+    for (DWORD id = (0xE0200000 | langid);
+         hKL == NULL && id <= (0xE0FF0000 | langid); id += 0x10000) {
       StringCchPrintfW(key, _countof(key), L"%08X", id);
       HKEY hSubKey;
       ret = RegOpenKeyExW(hKey, key, 0, KEY_READ, &hSubKey);
@@ -53,13 +52,58 @@ BOOL RegisterProfiles() {
         CLSID_TF_InputProcessorProfiles, NULL, CLSCTX_ALL);
     if (FAILED(hr))
       return FALSE;
+    WCHAR szProfile[100];
+    DWORD dwSize = GetEnvironmentVariable(L"TEXTSERVICE_PROFILE", szProfile,
+                                          ARRAYSIZE(szProfile));
+    BOOL hansEnable = FALSE;
+    BOOL hantEnable = FALSE;
+
+    if (dwSize > 0 && wcscmp(szProfile, L"hans") == 0)
+      hansEnable = TRUE;
+    if (dwSize > 0 && wcscmp(szProfile, L"hant") == 0)
+      hantEnable = TRUE;
+    if (!hantEnable && !hansEnable)
+      hansEnable = TRUE;
 
     hr = pInputProcessorProfileMgr->RegisterProfile(
         c_clsidTextService, TEXTSERVICE_LANGID, c_guidProfile, TEXTSERVICE_DESC,
         (ULONG)wcslen(TEXTSERVICE_DESC), achIconFile, cchIconFile,
-        TEXTSERVICE_ICON_INDEX, FindIME(), 0, TRUE, 0);
+        TEXTSERVICE_ICON_INDEX, FindIME(TEXTSERVICE_LANGID), 0, hansEnable, 0);
     if (FAILED(hr))
+      goto ExitError;
+
+    hr = pInputProcessorProfileMgr->RegisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_HANT, c_guidProfile,
+        TEXTSERVICE_DESC, (ULONG)wcslen(TEXTSERVICE_DESC), achIconFile,
+        cchIconFile, TEXTSERVICE_ICON_INDEX, FindIME(TEXTSERVICE_LANGID_HANT),
+        0, hantEnable, 0);
+    if (FAILED(hr))
+      goto ExitError;
+    // WeaselIME not support these languages, so HKL is NULL
+    hr = pInputProcessorProfileMgr->RegisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_HONGKONG, c_guidProfile,
+        TEXTSERVICE_DESC, (ULONG)wcslen(TEXTSERVICE_DESC), achIconFile,
+        cchIconFile, TEXTSERVICE_ICON_INDEX, NULL, 0, FALSE, 0);
+    if (FAILED(hr))
+      goto ExitError;
+
+    hr = pInputProcessorProfileMgr->RegisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_MACAU, c_guidProfile,
+        TEXTSERVICE_DESC, (ULONG)wcslen(TEXTSERVICE_DESC), achIconFile,
+        cchIconFile, TEXTSERVICE_ICON_INDEX, NULL, 0, FALSE, 0);
+    if (FAILED(hr))
+      goto ExitError;
+
+    hr = pInputProcessorProfileMgr->RegisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_SINGAPORE, c_guidProfile,
+        TEXTSERVICE_DESC, (ULONG)wcslen(TEXTSERVICE_DESC), achIconFile,
+        cchIconFile, TEXTSERVICE_ICON_INDEX, NULL, 0, FALSE, 0);
+    if (FAILED(hr)) {
+    ExitError:
+      pInputProcessorProfileMgr.Release();
       return FALSE;
+    }
+    pInputProcessorProfileMgr.Release();
   }
 
   return TRUE;
@@ -77,6 +121,15 @@ void UnregisterProfiles() {
 
     hr = pInputProcessorProfileMgr->UnregisterProfile(
         c_clsidTextService, TEXTSERVICE_LANGID, c_guidProfile, 0);
+    hr = pInputProcessorProfileMgr->UnregisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_HANT, c_guidProfile, 0);
+    hr = pInputProcessorProfileMgr->UnregisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_HONGKONG, c_guidProfile, 0);
+    hr = pInputProcessorProfileMgr->UnregisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_MACAU, c_guidProfile, 0);
+    hr = pInputProcessorProfileMgr->UnregisterProfile(
+        c_clsidTextService, TEXTSERVICE_LANGID_SINGAPORE, c_guidProfile, 0);
+    pInputProcessorProfileMgr.Release();
   }
 }
 

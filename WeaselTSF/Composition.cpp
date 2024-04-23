@@ -79,7 +79,7 @@ void WeaselTSF::_StartComposition(com_ptr<ITfContext> pContext,
   if (pStartCompositionEditSession != nullptr) {
     HRESULT hr;
     pContext->RequestEditSession(_tfClientId, pStartCompositionEditSession,
-                                 TF_ES_SYNC | TF_ES_READWRITE, &hr);
+                                 TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, &hr);
   }
 }
 
@@ -126,7 +126,7 @@ void WeaselTSF::_EndComposition(com_ptr<ITfContext> pContext, BOOL clear) {
   if ((pEditSession = new CEndCompositionEditSession(
            this, pContext, _pComposition, clear)) != NULL) {
     pContext->RequestEditSession(_tfClientId, pEditSession,
-                                 TF_ES_SYNC | TF_ES_READWRITE, &hr);
+                                 TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, &hr);
     pEditSession->Release();
   }
 }
@@ -222,7 +222,7 @@ BOOL WeaselTSF::_UpdateCompositionWindow(com_ptr<ITfContext> pContext) {
   }
   HRESULT hr;
   pContext->RequestEditSession(_tfClientId, pEditSession,
-                               TF_ES_SYNC | TF_ES_READ, &hr);
+                               TF_ES_ASYNCDONTCARE | TF_ES_READ, &hr);
   return SUCCEEDED(hr);
 }
 
@@ -266,6 +266,8 @@ STDAPI CInlinePreeditEditSession::DoEditSession(TfEditCookie ec) {
   std::wstring preedit = _context->preedit.str;
 
   com_ptr<ITfRange> pRangeComposition;
+  if (_pComposition == nullptr)
+    return E_FAIL;
   if ((_pComposition->GetRange(&pRangeComposition)) != S_OK)
     return E_FAIL;
 
@@ -340,6 +342,8 @@ STDMETHODIMP CInsertTextEditSession::DoEditSession(TfEditCookie ec) {
   TF_SELECTION tfSelection;
   HRESULT hRet = S_OK;
 
+  if (_pComposition == nullptr)
+    return E_FAIL;
   if (FAILED(_pComposition->GetRange(&pRange)))
     return E_FAIL;
 
@@ -380,6 +384,7 @@ void WeaselTSF::_UpdateComposition(com_ptr<ITfContext> pContext) {
 
   _pEditSessionContext->RequestEditSession(
       _tfClientId, this, TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, &hr);
+  _async_edit = !!(hr == TF_S_ASYNC);
   _UpdateCompositionWindow(pContext);
 }
 

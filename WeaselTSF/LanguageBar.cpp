@@ -5,6 +5,7 @@
 #include "WeaselTSF.h"
 #include "LanguageBar.h"
 #include "CandidateList.h"
+#include <WeaselUtility.h>
 
 static const DWORD LANGBARITEMSINK_COOKIE = 0x42424242;
 
@@ -31,6 +32,42 @@ static void HMENU2ITfMenu(HMENU hMenu, ITfMenu* pTfMenu) {
       }
     }
   }
+}
+
+static LONG RegGetStringValue(HKEY key,
+                              LPCWSTR lpSubKey,
+                              LPCWSTR lpValue,
+                              std::wstring& value) {
+  TCHAR szValue[MAX_PATH];
+  DWORD dwBufLen = MAX_PATH;
+
+  LONG lRes = RegGetValue(key, lpSubKey, lpValue, RRF_RT_REG_SZ, NULL, szValue,
+                          &dwBufLen);
+  if (lRes == ERROR_SUCCESS) {
+    value = std::wstring(szValue);
+  }
+  return lRes;
+}
+
+static LPCWSTR GetWeaselRegName() {
+  LPCWSTR WEASEL_REG_NAME_;
+  if (is_wow64())
+    WEASEL_REG_NAME_ = L"Software\\WOW6432Node\\Rime\\Weasel";
+  else
+    WEASEL_REG_NAME_ = L"Software\\Rime\\Weasel";
+
+  return WEASEL_REG_NAME_;
+}
+
+static bool open(const std::wstring& path) {
+  return (uintptr_t)ShellExecuteW(NULL, L"open", path.c_str(), NULL, NULL,
+                                  SW_SHOWNORMAL) > 32;
+}
+
+static bool explore(const std::wstring& path) {
+  std::wstring quoted_path = L"\"" + path + L"\"";
+  return (uintptr_t)ShellExecuteW(NULL, L"explore", quoted_path.c_str(), NULL,
+                                  NULL, SW_SHOWNORMAL) > 32;
 }
 
 CLangBarItemButton::CLangBarItemButton(com_ptr<WeaselTSF> pTextService,
@@ -103,12 +140,29 @@ STDAPI CLangBarItemButton::Show(BOOL fShow) {
   return S_OK;
 }
 
+static LANGID GetActiveProfileLangId() {
+  CComPtr<ITfInputProcessorProfileMgr> pInputProcessorProfileMgr;
+  HRESULT hr = pInputProcessorProfileMgr.CoCreateInstance(
+      CLSID_TF_InputProcessorProfiles, NULL, CLSCTX_ALL);
+  if (FAILED(hr))
+    return MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED);
+
+  TF_INPUTPROCESSORPROFILE profile;
+  hr = pInputProcessorProfileMgr->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD,
+                                                   &profile);
+  if (FAILED(hr))
+    return MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED);
+  return profile.langid;
+}
+
 STDAPI CLangBarItemButton::GetTooltipString(BSTR* pbstrToolTip) {
-#ifdef WEASEL_HANT
-  *pbstrToolTip = SysAllocString(L"左鍵切換模式，右鍵打開菜單");
-#else
-  *pbstrToolTip = SysAllocString(L"左键切换模式，右键打开菜单");
-#endif
+  LANGID langid = GetActiveProfileLangId();
+  if (langid == TEXTSERVICE_LANGID) {
+    *pbstrToolTip = SysAllocString(L"左键切换模式，右键打开菜单");
+  } else {
+    *pbstrToolTip = SysAllocString(L"左鍵切換模式，右鍵打開菜單");
+  }
+
   return (*pbstrToolTip == NULL) ? E_OUTOFMEMORY : S_OK;
 }
 
@@ -126,7 +180,12 @@ STDAPI CLangBarItemButton::OnClick(TfLBIClick click,
     /* Open menu */
     HWND hwnd = _pTextService->_GetFocusedContextWindow();
     if (hwnd != NULL) {
-      HMENU menu = LoadMenuW(g_hInst, MAKEINTRESOURCE(IDR_MENU_POPUP));
+      LANGID langid = GetActiveProfileLangId();
+
+      HMENU menu =
+          ((langid == TEXTSERVICE_LANGID)
+               ? LoadMenuW(g_hInst, MAKEINTRESOURCE(IDR_MENU_POPUP))
+               : LoadMenuW(g_hInst, MAKEINTRESOURCE(IDR_MENU_POPUP_HANT)));
       HMENU popupMenu = GetSubMenu(menu, 0);
       UINT wID = TrackPopupMenuEx(
           popupMenu, TPM_NONOTIFY | TPM_RETURNCMD | TPM_HORPOSANIMATION, pt.x,
@@ -208,21 +267,15 @@ STDAPI CLangBarItemButton::UnadviseSink(DWORD dwCookie) {
 void CLangBarItemButton::UpdateWeaselStatus(weasel::Status stat) {
   if (stat.ascii_mode != ascii_mode) {
     ascii_mode = stat.ascii_mode;
-    if (_pLangBarItemSink) {
-      _pLangBarItemSink->OnUpdate(TF_LBI_STATUS | TF_LBI_ICON);
-    }
   }
   if (_current_schema_zhung_icon != _style.current_zhung_icon) {
     _current_schema_zhung_icon = _style.current_zhung_icon;
-    if (_pLangBarItemSink) {
-      _pLangBarItemSink->OnUpdate(TF_LBI_STATUS | TF_LBI_ICON);
-    }
   }
   if (_current_schema_ascii_icon != _style.current_ascii_icon) {
     _current_schema_ascii_icon = _style.current_ascii_icon;
-    if (_pLangBarItemSink) {
-      _pLangBarItemSink->OnUpdate(TF_LBI_STATUS | TF_LBI_ICON);
-    }
+  }
+  if (_pLangBarItemSink) {
+    _pLangBarItemSink->OnUpdate(TF_LBI_STATUS | TF_LBI_ICON);
   }
 }
 
@@ -248,41 +301,43 @@ void CLangBarItemButton::SetLangbarStatus(DWORD dwStatus, BOOL fSet) {
   return;
 }
 
-BOOL is_wow64() {
-  DWORD errorCode;
-  if (GetSystemWow64DirectoryW(NULL, 0) == 0)
-    if ((errorCode = GetLastError()) == ERROR_CALL_NOT_IMPLEMENTED)
-      return FALSE;
-    else
-      ExitProcess((UINT)errorCode);
-  else
-    return TRUE;
-}
-
 void WeaselTSF::_HandleLangBarMenuSelect(UINT wID) {
-  if (wID != ID_WEASELTRAY_RERUN_SERVICE)
-    m_client.TrayCommand(wID);
-  else {
-    std::wstring WEASEL_REG_NAME_;
-    if (is_wow64())
-      WEASEL_REG_NAME_ = L"Software\\WOW6432Node\\Rime\\Weasel";
-    else
-      WEASEL_REG_NAME_ = L"Software\\Rime\\Weasel";
-
-    TCHAR szValue[MAX_PATH];
-    DWORD dwBufLen = MAX_PATH;
-
-    LONG lRes =
-        RegGetValue(HKEY_LOCAL_MACHINE, WEASEL_REG_NAME_.c_str(), L"WeaselRoot",
-                    RRF_RT_REG_SZ, NULL, szValue, &dwBufLen);
-    if (lRes == ERROR_SUCCESS) {
-      std::wstring dir(szValue);
-      std::thread th([dir]() {
-        ShellExecuteW(NULL, L"open", (dir + L"\\start_service.bat").c_str(),
-                      NULL, dir.c_str(), SW_HIDE);
-      });
-      th.detach();
-    }
+  std::wstring dir{};
+  switch (wID) {
+    case ID_WEASELTRAY_RERUN_SERVICE:
+    case ID_WEASELTRAY_INSTALLDIR:
+      if (RegGetStringValue(HKEY_LOCAL_MACHINE, GetWeaselRegName(),
+                            L"WeaselRoot", dir) == ERROR_SUCCESS) {
+        if (wID == ID_WEASELTRAY_RERUN_SERVICE) {
+          std::thread th([dir]() {
+            ShellExecuteW(NULL, L"open", (dir + L"\\start_service.bat").c_str(),
+                          NULL, dir.c_str(), SW_HIDE);
+          });
+          th.detach();
+        } else
+          explore(dir);
+      }
+      break;
+    case ID_WEASELTRAY_USERCONFIG:
+      if (RegGetStringValue(HKEY_CURRENT_USER, L"Software\\Rime\\Weasel",
+                            L"RimeUserDir", dir) == ERROR_SUCCESS) {
+        if (dir.empty()) {
+          TCHAR _path[MAX_PATH];
+          ExpandEnvironmentStringsW(L"%AppData%\\Rime", _path, _countof(_path));
+          dir = std::wstring(_path);
+        }
+        explore(dir);
+      }
+      break;
+    case ID_WEASELTRAY_WIKI:
+      open(L"https://rime.im/docs/");
+      break;
+    case ID_WEASELTRAY_FORUM:
+      open(L"https://rime.im/discuss/");
+      break;
+    default:
+      m_client.TrayCommand(wID);
+      break;
   }
 }
 
