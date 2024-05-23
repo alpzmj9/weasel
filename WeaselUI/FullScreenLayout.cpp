@@ -26,11 +26,13 @@ void weasel::FullScreenLayout::DoLayout(CDCHandle dc, PDWR pDWR) {
     m_layout->DoLayout(dc, pDWR);
     if ((_style.hilited_mark_color & 0xff000000)) {
       CSize sg;
-      if (_style.mark_text.empty())
-        GetTextSizeDW(L"|", 1, pDWR->pTextFormat, pDWR, &sg);
-      else
-        GetTextSizeDW(_style.mark_text, _style.mark_text.length(),
-                      pDWR->pTextFormat, pDWR, &sg);
+      if (candidates_count) {
+        if (_style.mark_text.empty())
+          GetTextSizeDW(L"|", 1, pDWR->pTextFormat, pDWR, &sg);
+        else
+          GetTextSizeDW(_style.mark_text, _style.mark_text.length(),
+                        pDWR->pTextFormat, pDWR, &sg);
+      }
       mark_width = sg.cx;
       mark_height = sg.cy;
       if (_style.mark_text.empty()) {
@@ -90,16 +92,17 @@ bool FullScreenLayout::AdjustFontPoint(CDCHandle dc,
     int fontPointComment;
 
     if (pDWR->pLabelTextFormat != NULL)
-      fontPointLabel = pDWR->pLabelTextFormat->GetFontSize() / pDWR->dpiScaleX_;
+      fontPointLabel =
+          (int)(pDWR->pLabelTextFormat->GetFontSize() / pDWR->dpiScaleX_);
     else
       fontPointLabel = 0;
     if (pDWR->pTextFormat != NULL)
-      fontPoint = pDWR->pTextFormat->GetFontSize() / pDWR->dpiScaleX_;
+      fontPoint = (int)(pDWR->pTextFormat->GetFontSize() / pDWR->dpiScaleX_);
     else
       fontPoint = 0;
     if (pDWR->pCommentTextFormat != NULL)
       fontPointComment =
-          pDWR->pCommentTextFormat->GetFontSize() / pDWR->dpiScaleX_;
+          (int)(pDWR->pCommentTextFormat->GetFontSize() / pDWR->dpiScaleX_);
     else
       fontPointComment = 0;
     CSize sz = m_layout->GetContentSize();

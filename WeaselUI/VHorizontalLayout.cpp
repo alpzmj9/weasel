@@ -16,11 +16,13 @@ void VHorizontalLayout::DoLayout(CDCHandle dc, PDWR pDWR) {
 
   if ((_style.hilited_mark_color & 0xff000000)) {
     CSize sg;
-    if (_style.mark_text.empty())
-      GetTextSizeDW(L"|", 1, pDWR->pTextFormat, pDWR, &sg);
-    else
-      GetTextSizeDW(_style.mark_text, _style.mark_text.length(),
-                    pDWR->pTextFormat, pDWR, &sg);
+    if (candidates_count) {
+      if (_style.mark_text.empty())
+        GetTextSizeDW(L"|", 1, pDWR->pTextFormat, pDWR, &sg);
+      else
+        GetTextSizeDW(_style.mark_text, _style.mark_text.length(),
+                      pDWR->pTextFormat, pDWR, &sg);
+    }
 
     mark_width = sg.cx;
     mark_height = sg.cy;
@@ -38,8 +40,10 @@ void VHorizontalLayout::DoLayout(CDCHandle dc, PDWR pDWR) {
 
   // calc page indicator
   CSize pgszl, pgszr;
-  GetTextSizeDW(pre, pre.length(), pDWR->pPreeditTextFormat, pDWR, &pgszl);
-  GetTextSizeDW(next, next.length(), pDWR->pPreeditTextFormat, pDWR, &pgszr);
+  if (!IsInlinePreedit()) {
+    GetTextSizeDW(pre, pre.length(), pDWR->pPreeditTextFormat, pDWR, &pgszl);
+    GetTextSizeDW(next, next.length(), pDWR->pPreeditTextFormat, pDWR, &pgszr);
+  }
   bool page_en = (_style.prevpage_color & 0xff000000) &&
                  (_style.nextpage_color & 0xff000000);
   int pgh = page_en ? pgszl.cy + pgszr.cy + _style.hilite_spacing +
@@ -207,8 +211,19 @@ void VHorizontalLayout::DoLayout(CDCHandle dc, PDWR pDWR) {
     width -= _style.spacing;
 
   height += real_margin_y;
-  _highlightRect = _candidateRects[id];
+
+  if (candidates_count) {
+    width = max(width, _style.min_width);
+    height = max(height, _style.min_height);
+  }
   UpdateStatusIconLayout(&width, &height);
+  // candidate rectangle always align to bottom side, margin_y to the bottom
+  // edge
+  for (auto i = 0; i < candidates_count && i < MAX_CANDIDATES_COUNT; ++i)
+    _candidateRects[i].bottom =
+        max(_candidateRects[i].bottom, height - real_margin_y);
+
+  _highlightRect = _candidateRects[id];
   _contentSize.SetSize(width + offsetX, height + offsetY);
 
   // calc page indicator
@@ -244,11 +259,13 @@ void VHorizontalLayout::DoLayoutWithWrap(CDCHandle dc, PDWR pDWR) {
 
   if ((_style.hilited_mark_color & 0xff000000)) {
     CSize sg;
-    if (_style.mark_text.empty())
-      GetTextSizeDW(L"|", 1, pDWR->pTextFormat, pDWR, &sg);
-    else
-      GetTextSizeDW(_style.mark_text, _style.mark_text.length(),
-                    pDWR->pTextFormat, pDWR, &sg);
+    if (candidates_count) {
+      if (_style.mark_text.empty())
+        GetTextSizeDW(L"|", 1, pDWR->pTextFormat, pDWR, &sg);
+      else
+        GetTextSizeDW(_style.mark_text, _style.mark_text.length(),
+                      pDWR->pTextFormat, pDWR, &sg);
+    }
 
     mark_width = sg.cx;
     mark_height = sg.cy;
@@ -266,8 +283,10 @@ void VHorizontalLayout::DoLayoutWithWrap(CDCHandle dc, PDWR pDWR) {
 
   // calc page indicator
   CSize pgszl, pgszr;
-  GetTextSizeDW(pre, pre.length(), pDWR->pPreeditTextFormat, pDWR, &pgszl);
-  GetTextSizeDW(next, next.length(), pDWR->pPreeditTextFormat, pDWR, &pgszr);
+  if (!IsInlinePreedit()) {
+    GetTextSizeDW(pre, pre.length(), pDWR->pPreeditTextFormat, pDWR, &pgszl);
+    GetTextSizeDW(next, next.length(), pDWR->pPreeditTextFormat, pDWR, &pgszr);
+  }
   bool page_en = (_style.prevpage_color & 0xff000000) &&
                  (_style.nextpage_color & 0xff000000);
   int pgh = page_en ? pgszl.cy + pgszr.cy + _style.hilite_spacing +
@@ -280,13 +299,14 @@ void VHorizontalLayout::DoLayoutWithWrap(CDCHandle dc, PDWR pDWR) {
     size = GetPreeditSize(dc, _context.preedit, pDWR->pPreeditTextFormat, pDWR);
     size_t szx = max(size.cx, pgw), szy = pgh;
     // icon size wider then preedit text
-    int xoffset = (STATUS_ICON_SIZE >= szx && ShouldDisplayStatusIcon())
-                      ? (STATUS_ICON_SIZE - szx) / 2
+    int xoffset = ((size_t)STATUS_ICON_SIZE >= szx && ShouldDisplayStatusIcon())
+                      ? (int)(STATUS_ICON_SIZE - szx) / 2
                       : 0;
     _preeditRect.SetRect(width + xoffset, h, width + xoffset + size.cx,
                          h + size.cy);
     width += size.cx + xoffset * 2 + _style.spacing;
-    height = max(height, offsetY + real_margin_y + size.cy + szy);
+    height = static_cast<int>(
+        max((size_t)height, offsetY + real_margin_y + size.cy + szy));
     if (ShouldDisplayStatusIcon())
       height += STATUS_ICON_SIZE;
   }
@@ -483,10 +503,11 @@ void VHorizontalLayout::DoLayoutWithWrap(CDCHandle dc, PDWR pDWR) {
 
   width += real_margin_x;
   height += real_margin_y;
-  if (!_context.preedit.str.empty() && !candidates_count) {
+  if (candidates_count) {
     width = max(width, _style.min_width);
     height = max(height, _style.min_height);
   }
+  _highlightRect = _candidateRects[id];
   UpdateStatusIconLayout(&width, &height);
   _contentSize.SetSize(width + 2 * offsetX, height + offsetY);
   _contentRect.SetRect(0, 0, _contentSize.cx, _contentSize.cy);

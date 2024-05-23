@@ -301,6 +301,12 @@ void CLangBarItemButton::SetLangbarStatus(DWORD dwStatus, BOOL fSet) {
   return;
 }
 
+std::wstring WeaselTSF::_GetRootDir() {
+  std::wstring dir{};
+  RegGetStringValue(HKEY_LOCAL_MACHINE, GetWeaselRegName(), L"WeaselRoot", dir);
+  return dir;
+}
+
 void WeaselTSF::_HandleLangBarMenuSelect(UINT wID) {
   std::wstring dir{};
   switch (wID) {
@@ -328,6 +334,9 @@ void WeaselTSF::_HandleLangBarMenuSelect(UINT wID) {
         }
         explore(dir);
       }
+      break;
+    case ID_WEASELTRAY_LOGDIR:
+      explore(WeaselLogPath().wstring());
       break;
     case ID_WEASELTRAY_WIKI:
       open(L"https://rime.im/docs/");

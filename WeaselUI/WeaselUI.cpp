@@ -64,7 +64,8 @@ void UIImpl::ShowWithTimeout(size_t millisec) {
   DLOG(INFO) << "ShowWithTimeout: " << millisec;
   panel.ShowWindow(SW_SHOWNA);
   shown = true;
-  SetTimer(panel.m_hWnd, AUTOHIDE_TIMER, millisec, &UIImpl::OnTimer);
+  SetTimer(panel.m_hWnd, AUTOHIDE_TIMER, static_cast<UINT>(millisec),
+           &UIImpl::OnTimer);
   timer = UINT_PTR(this);
 }
 VOID CALLBACK UIImpl::OnTimer(_In_ HWND hwnd,
@@ -161,13 +162,16 @@ void UI::UpdateInputPosition(RECT const& rc) {
 }
 
 void UI::Update(const Context& ctx, const Status& status) {
+  if (ctx_ == ctx && status_ == status)
+    return;
   ctx_ = ctx;
   status_ = status;
   if (style_.candidate_abbreviate_length > 0) {
     for (auto& c : ctx_.cinfo.candies) {
-      if (c.str.length() > style_.candidate_abbreviate_length) {
-        c.str = c.str.substr(0, style_.candidate_abbreviate_length - 1) +
-                L"..." + c.str.substr(c.str.length() - 1);
+      if (c.str.length() > (size_t)style_.candidate_abbreviate_length) {
+        c.str =
+            c.str.substr(0, (size_t)style_.candidate_abbreviate_length - 1) +
+            L"..." + c.str.substr(c.str.length() - 1);
       }
     }
   }

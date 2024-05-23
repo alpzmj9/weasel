@@ -63,4 +63,6 @@ void WeaselServerApp::SetupMenuHandlers() {
   m_server.AddMenuHandler(ID_WEASELTRAY_INSTALLDIR, std::bind(explore, dir));
   m_server.AddMenuHandler(ID_WEASELTRAY_USERCONFIG,
                           std::bind(explore, WeaselUserDataPath()));
+  m_server.AddMenuHandler(ID_WEASELTRAY_LOGDIR,
+                          std::bind(explore, WeaselLogPath()));
 }

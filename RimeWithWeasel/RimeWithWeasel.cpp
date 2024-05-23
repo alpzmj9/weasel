@@ -2,8 +2,8 @@
 #include <logging.h>
 #include <RimeWithWeasel.h>
 #include <StringAlgorithm.hpp>
+#include <WeaselConstants.h>
 #include <WeaselUtility.h>
-#include <WeaselVersion.h>
 
 #include <filesystem>
 #include <map>
@@ -100,6 +100,7 @@ void RimeWithWeaselHandler::_Setup() {
   weasel_traits.distribution_code_name = WEASEL_CODE_NAME;
   weasel_traits.distribution_version = WEASEL_VERSION;
   weasel_traits.app_name = "rime.weasel";
+  weasel_traits.log_dir = WeaselLogPath().u8string().c_str();
   RimeSetup(&weasel_traits);
   RimeSetNotificationHandler(&RimeWithWeaselHandler::OnNotify, this);
 }
@@ -284,7 +285,7 @@ BOOL RimeWithWeaselHandler::ProcessKeyEvent(KeyEvent keyEvent,
         (keyEvent.keycode == ibus::Keycode::Escape) ||
         ((keyEvent.mask & (1 << 2)) &&
          (keyEvent.keycode == ibus::Keycode::XK_c ||
-          keyEvent.keycode == ibus::Keycode::XK_c ||
+          keyEvent.keycode == ibus::Keycode::XK_C ||
           keyEvent.keycode == ibus::Keycode::XK_bracketleft));
     if (isVimBackInCommandMode && RimeGetOption(session_id, "vim_mode") &&
         !RimeGetOption(session_id, "ascii_mode")) {
@@ -540,7 +541,11 @@ bool RimeWithWeaselHandler::_IsDeployerRunning() {
 }
 
 void RimeWithWeaselHandler::_UpdateUI(WeaselSessionId ipc_id) {
-  Status weasel_status;
+  // if m_ui nullptr, _UpdateUI meaningless
+  if (!m_ui)
+    return;
+
+  Status& weasel_status = m_ui->status();
   Context weasel_context;
 
   RimeSessionId session_id = to_session_id(ipc_id);
@@ -555,20 +560,16 @@ void RimeWithWeaselHandler::_UpdateUI(WeaselSessionId ipc_id) {
     _GetContext(weasel_context, session_id);
   }
 
-  if (!m_ui)
-    return;
-
   SessionStatus& session_status = get_session_status(ipc_id);
   if (RimeGetOption(session_id, "inline_preedit"))
     session_status.style.client_caps |= INLINE_PREEDIT_CAPABLE;
   else
     session_status.style.client_caps &= ~INLINE_PREEDIT_CAPABLE;
 
-  if (weasel_status.composing) {
+  if (weasel_status.composing && !is_tsf) {
     m_ui->Update(weasel_context, weasel_status);
-    if (!is_tsf)
-      m_ui->Show();
-  } else if (!_ShowMessage(weasel_context, weasel_status)) {
+    m_ui->Show();
+  } else if (!_ShowMessage(weasel_context, weasel_status) && !is_tsf) {
     m_ui->Hide();
     m_ui->Update(weasel_context, weasel_status);
   }
@@ -728,9 +729,9 @@ bool RimeWithWeaselHandler::_ShowMessage(Context& ctx, Status& status) {
     else if (m_message_value == "failure") {
       if (GetThreadUILanguage() ==
           MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL))
-        tips = L"有錯誤，請查看日誌 %TEMP%\\rime.weasel.*.INFO";
+        tips = L"有錯誤，請查看日誌 %TEMP%\\rime.weasel\\rime.weasel.*.INFO";
       else
-        tips = L"有错误，请查看日志 %TEMP%\\rime.weasel.*.INFO";
+        tips = L"有错误，请查看日志 %TEMP%\\rime.weasel\\rime.weasel.*.INFO";
     }
   } else if (m_message_type == "schema") {
     tips = /*L"【" + */ status.schema_name /* + L"】"*/;
@@ -1128,6 +1129,7 @@ void RimeWithWeaselHandler::_UpdateShowNotifications(RimeConfig* config,
     }
     if (initialize)
       m_show_notifications_base = m_show_notifications;
+    RimeConfigEnd(&iter);
   } else {
     // not configured, or incorrect type
     if (initialize)
@@ -1486,11 +1488,10 @@ void RimeWithWeaselHandler::_GetStatus(Status& stat,
         _LoadSchemaSpecificSettings(ipc_id, schema_id);
         _LoadAppInlinePreeditSet(ipc_id, true);
         if (session_status.style.inline_preedit != inline_preedit)
-          _UpdateInlinePreeditStatus(
-              ipc_id);  // in case of inline_preedit set in schema
-        _RefreshTrayIcon(
-            session_id,
-            _UpdateUICallback);  // refresh icon after schema changed
+          // in case of inline_preedit set in schema
+          _UpdateInlinePreeditStatus(ipc_id);
+        // refresh icon after schema changed
+        _RefreshTrayIcon(session_id, _UpdateUICallback);
         m_ui->style() = session_status.style;
         if (m_show_notifications.find("schema") != m_show_notifications.end() &&
             m_show_notifications_time > 0) {

@@ -1,7 +1,9 @@
 ﻿#include "stdafx.h"
 
+#include <WeaselIPCData.h>
+#include <thread>
+#include <shellapi.h>
 #include "WeaselTSF.h"
-#include "WeaselCommon.h"
 #include "CandidateList.h"
 #include "LanguageBar.h"
 #include "Compartment.h"
@@ -23,6 +25,7 @@ WeaselTSF::WeaselTSF() {
 
   _dwTextEditSinkCookie = TF_INVALID_COOKIE;
   _dwTextLayoutSinkCookie = TF_INVALID_COOKIE;
+  _dwThreadFocusSinkCookie = TF_INVALID_COOKIE;
   _fTestKeyDownPending = FALSE;
   _fTestKeyUpPending = FALSE;
 
@@ -64,6 +67,8 @@ STDAPI WeaselTSF::QueryInterface(REFIID riid, void** ppvObject) {
     *ppvObject = (ITfThreadFocusSink*)this;
   else if (IsEqualIID(riid, IID_ITfDisplayAttributeProvider))
     *ppvObject = (ITfDisplayAttributeProvider*)this;
+  else if (IsEqualIID(riid, IID_ITfThreadFocusSink))
+    *ppvObject = (ITfThreadFocusSink*)this;
 
   if (*ppvObject) {
     AddRef();
@@ -105,11 +110,13 @@ STDAPI WeaselTSF::Deactivate() {
 
   _UninitCompartment();
 
+  _UninitThreadMgrEventSink();
+
   _pThreadMgr = NULL;
 
   _tfClientId = TF_CLIENTID_NULL;
 
-  _cand->Destroy();
+  _cand->DestroyAll();
 
   return S_OK;
 }
@@ -151,6 +158,8 @@ STDAPI WeaselTSF::ActivateEx(ITfThreadMgr* pThreadMgr,
 
   if (!_InitCompartment())
     goto ExitError;
+  if (!_InitThreadFocusSink())
+    goto ExitError;
 
   _EnsureServerConnected();
 
@@ -162,11 +171,35 @@ ExitError:
 }
 
 STDMETHODIMP WeaselTSF::OnSetThreadFocus() {
+  if (m_client.Echo()) {
+    m_client.ProcessKeyEvent(0);
+    weasel::ResponseParser parser(NULL, NULL, &_status, NULL, &_cand->style());
+    bool ok = m_client.GetResponseData(std::ref(parser));
+    if (ok)
+      _UpdateLanguageBar(_status);
+  }
   return S_OK;
 }
 STDMETHODIMP WeaselTSF::OnKillThreadFocus() {
   _AbortComposition();
   return S_OK;
+}
+BOOL WeaselTSF::_InitThreadFocusSink() {
+  com_ptr<ITfSource> pSource;
+  if (FAILED(_pThreadMgr->QueryInterface(&pSource)))
+    return FALSE;
+  if (FAILED(pSource->AdviseSink(IID_ITfThreadFocusSink,
+                                 (ITfThreadFocusSink*)this,
+                                 &_dwThreadFocusSinkCookie)))
+    return FALSE;
+  return TRUE;
+}
+void WeaselTSF::_UninitThreadFocusSink() {
+  com_ptr<ITfSource> pSource;
+  if (FAILED(_pThreadMgr->QueryInterface(&pSource)))
+    return;
+  if (FAILED(pSource->UnadviseSink(_dwThreadFocusSinkCookie)))
+    return;
 }
 
 STDMETHODIMP WeaselTSF::OnActivated(REFCLSID clsid,
@@ -186,6 +219,8 @@ STDMETHODIMP WeaselTSF::OnActivated(REFCLSID clsid,
   return S_OK;
 }
 
+static unsigned int retry = 0;
+
 void WeaselTSF::_EnsureServerConnected() {
   if (!m_client.Echo()) {
     m_client.Disconnect();
@@ -195,6 +230,18 @@ void WeaselTSF::_EnsureServerConnected() {
     bool ok = m_client.GetResponseData(std::ref(parser));
     if (ok) {
       _UpdateLanguageBar(_status);
+    }
+    retry++;
+    if (retry >= 6) {
+      if (!m_client.Echo()) {
+        std::wstring dir = _GetRootDir();
+        std::thread th([dir]() {
+          ShellExecuteW(NULL, L"open", (dir + L"\\start_service.bat").c_str(),
+                        NULL, dir.c_str(), SW_HIDE);
+        });
+        th.detach();
+      }
+      retry = 0;
     }
   }
 }

@@ -1,5 +1,5 @@
 #pragma once
-#include <WeaselCommon.h>
+#include <WeaselIPCData.h>
 #include <WeaselUI.h>
 #include "StandardLayout.h"
 #include "Layout.h"
@@ -131,6 +131,7 @@ class WeaselPanel
   BYTE m_candidateCount;
 
   bool hide_candidates;
+  bool m_sticky;
   // for multi font_face & font_point
   PDWR pDWR;
   std::function<void(size_t* const, size_t* const, bool* const, bool* const)>&

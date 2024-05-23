@@ -1,17 +1,10 @@
 ﻿#pragma once
 
-// #include <string>
-// #include <vector>
+#include <string>
+#include <vector>
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/string.hpp>
 
-#define WEASEL_IME_NAME L"小狼毫"
-#define WEASEL_REG_KEY L"Software\\Rime\\Weasel"
-#define RIME_REG_KEY L"Software\\Rime"
-
-// #define USE_SHARP_COLOR_CODE
-
-// #define _DEBUG_
 namespace weasel {
 
 enum TextAttributeType { NONE = 0, HIGHLIGHTED, LAST_TYPE };
@@ -169,6 +162,12 @@ struct Status {
     disabled = false;
     full_shape = false;
     type = SCHEMA;
+  }
+  bool operator==(const Status status) {
+    return (status.schema_name == schema_name &&
+            status.schema_id == schema_id && status.ascii_mode == ascii_mode &&
+            status.composing == composing && status.disabled == disabled &&
+            status.full_shape == full_shape && status.type == type);
   }
   // 輸入方案
   std::wstring schema_name;

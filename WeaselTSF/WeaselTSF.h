@@ -1,8 +1,8 @@
 #pragma once
 
-#include <WeaselCommon.h>
 #include "Globals.h"
-#include "WeaselIPC.h"
+#include <WeaselIPC.h>
+#include <WeaselIPCData.h>
 
 class CCandidateList;
 class CLangBarItemButton;
@@ -160,6 +160,10 @@ class WeaselTSF : public ITfTextInputProcessorEx,
   /* TSF Related */
   BOOL _InitThreadMgrEventSink();
   void _UninitThreadMgrEventSink();
+  // ITfThreadFocusSink
+  BOOL _InitThreadFocusSink();
+  void _UninitThreadFocusSink();
+  DWORD _dwThreadFocusSinkCookie;
 
   BOOL _InitTextEditSink(com_ptr<ITfDocumentMgr> pDocMgr);
 
@@ -183,6 +187,8 @@ class WeaselTSF : public ITfTextInputProcessorEx,
   BOOL _InitCompartment();
   void _UninitCompartment();
   HRESULT _HandleCompartment(REFGUID guidCompartment);
+
+  std::wstring _GetRootDir();
 
   bool isImmersive() const {
     return (_activateFlags & TF_TMF_IMMERSIVEMODE) != 0;

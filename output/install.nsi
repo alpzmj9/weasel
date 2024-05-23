@@ -11,7 +11,7 @@ Unicode true
 ; General
 
 !ifndef WEASEL_VERSION
-!define WEASEL_VERSION 1.0.0
+!define WEASEL_VERSION 0.1.0
 !endif
 
 !ifndef WEASEL_BUILD
@@ -78,7 +78,7 @@ LangString LNKFORAPPFOLDER ${LANG_TRADCHINESE} "【小狼毫】程序文件夾"
 LangString LNKFORUPDATER ${LANG_TRADCHINESE} "【小狼毫】檢查新版本"
 LangString LNKFORSETUP ${LANG_TRADCHINESE} "【小狼毫】安裝選項"
 LangString LNKFORUNINSTALL ${LANG_TRADCHINESE} "卸載小狼毫"
-LangString CONFIRMATION ${LANG_TRADCHINESE} "安裝前，我打盤先卸載舊版本的小狼毫。$\n$\n按下「確定」移除舊版本，按下「取消」放棄本次安裝。"
+LangString CONFIRMATION ${LANG_TRADCHINESE} "安裝前，請先卸載舊版本的小狼毫。$\n$\n按下「確定」移除舊版本，按下「取消」放棄本次安裝。"
 
 !insertmacro MUI_LANGUAGE "SimpChinese"
 LangString DISPLAYNAME ${LANG_SIMPCHINESE} "小狼毫输入法"
@@ -193,14 +193,6 @@ program_files:
     File /nonfatal "weaselARM.ime"
     File /nonfatal "weaselARM64.ime"
     File /nonfatal "weaselARM64X.ime"
-  ${EndIf}
-  File "weaselt.ime"
-  ${If} ${RunningX64}
-    File "weaseltx64.ime"
-  ${EndIf}
-  ${If} ${IsNativeARM64}
-    File /nonfatal "weaseltARM.ime"
-    File /nonfatal "weaseltARM64.ime"
   ${EndIf}
   ; install x64 build for NativeARM64_WINDOWS11 and NativeAMD64_WINDOWS11
   ${If} ${AtLeastWin11} ; Windows 11 and above
