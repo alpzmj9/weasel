@@ -4,11 +4,21 @@
 #include "KeyEvent.h"
 #include "CandidateList.h"
 
-void WeaselTSF::_ProcessKeyEvent(WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
-  if (!_IsKeyboardOpen())
-    return;
+static weasel::KeyEvent prevKeyEvent;
+static BOOL prevfEaten = FALSE;
+static int keyCountToSimulate = 0;
 
-  _EnsureServerConnected();
+void WeaselTSF::_ProcessKeyEvent(WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
+  if (!_IsKeyboardOpen() || _IsKeyboardDisabled()) {
+    *pfEaten = FALSE;
+    return;
+  }
+
+  // if server connection is Not OK, don't eat it.
+  if (!_EnsureServerConnected()) {
+    *pfEaten = FALSE;
+    return;
+  }
   weasel::KeyEvent ke;
   GetKeyboardState(_lpbKeyState);
   if (!ConvertKeyEvent(static_cast<UINT>(wParam), lParam, _lpbKeyState, ke)) {
@@ -22,7 +32,31 @@ void WeaselTSF::_ProcessKeyEvent(WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
       else if (ke.keycode == ibus::Down)
         ke.keycode = ibus::Up;
     }
-    *pfEaten = (BOOL)m_client.ProcessKeyEvent(ke);
+    if (!keyCountToSimulate)
+      *pfEaten = (BOOL)m_client.ProcessKeyEvent(ke);
+
+    if (ke.keycode == ibus::Caps_Lock) {
+      if (prevKeyEvent.keycode == ibus::Caps_Lock && prevfEaten == TRUE &&
+          (ke.mask & ibus::RELEASE_MASK) && (!keyCountToSimulate)) {
+        if ((GetKeyState(VK_CAPITAL) & 0x01)) {
+          if (_committed || (!*pfEaten && _status.composing)) {
+            keyCountToSimulate = 2;
+            INPUT inputs[2];
+            inputs[0].type = INPUT_KEYBOARD;
+            inputs[0].ki = {VK_CAPITAL, 0, 0, 0, 0};
+            inputs[1].type = INPUT_KEYBOARD;
+            inputs[1].ki = {VK_CAPITAL, 0, KEYEVENTF_KEYUP, 0, 0};
+            ::SendInput(sizeof(inputs) / sizeof(INPUT), inputs, sizeof(INPUT));
+          }
+        }
+        *pfEaten = TRUE;
+      }
+      if (keyCountToSimulate)
+        keyCountToSimulate--;
+    }
+
+    prevfEaten = *pfEaten;
+    prevKeyEvent = ke;
   }
 }
 
